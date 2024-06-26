@@ -10,16 +10,16 @@
 -   [Links](#Links)
 -   [Citation](#citation)
 
-# Overview {#overview}
+# Overview
 
 The repository L5ET-DEV is a collection of `R` scripts and data to reproduce the main data panels of Abe et al.,2024.
 
-# Repo Contents {#repo-contents}
+# Repo Contents
 
 -   [scripts](./scripts): `R` scripts for plotting the main data figures.
 -   [data](./data): data and helper tables.
 
-# Requirements {#requirements}
+# Requirements
 
 ## Data
 
@@ -45,7 +45,7 @@ Further, CRAN package should be compatible with Windows, Mac, and Linux operatin
 
 The user should install `R` version 4.4.1 or higher, and several packages set up from CRAN or from source (see scripts for detail).
 
-# Links {#Links}
+# Links
 
 ShinyServer for transcriptional landscapes of Abe et al., 2024: <http://genebrowser.unige.ch/L5ET_shiny-v3/>
 
@@ -55,7 +55,7 @@ ShinyServer for transcriptional landscapes of Abe et al., 2024: <http://genebrow
 
 <https://github.com/awaisj14/CellOracle_ET/tree/main/Pseudobulk_ATAC_files_Yao_2021>
 
-# Citation {#citation}
+# Citation
 
 ###Research article
 
