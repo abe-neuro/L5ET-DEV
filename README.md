@@ -29,7 +29,7 @@ Data can be downloaded from GEO server:
 
 -   MAPseq mapping of L5 ET projections
 
-Download and save the R object (.RDS) locally. Change the path in the script to this location to load the object.
+Download and save the R object (.RDS) locally. To load the object change the path in the R script to this location.
 
 ## Hardware Requirements
 
