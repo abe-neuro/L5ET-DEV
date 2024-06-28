@@ -18,7 +18,7 @@ USER ${NB_USER}
 
 ## Install R packages
 RUN install2.r --error --skipinstalled -n 4 torch luz BiocManager
-RUN Rscript -e 'torch::install_torch()'
+RUN Rscript -e 'torch::install_torch();BiocManager::install("DelayedArray")'
 
 
 ## Copy files to home folder
