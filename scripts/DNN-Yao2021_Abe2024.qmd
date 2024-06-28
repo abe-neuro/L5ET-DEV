@@ -1,0 +1,344 @@
+---
+title: "Figures: Abe et al. 2024 (Nature) - DNN"
+author: "Julien Prados & Philipp Abe"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+# Abstract
+
+This script provides an example on how to predict cell identity with single cell RNA-seq data. The models were trained on data from Yao et al., 2021 (Cell) <https://doi.org/10.1016/j.cell.2021.04.021>: The first model predicts subclass and the second model subtype/cluster identity. The prediction runs hierarchically, so that subclass prediction precedes subtype prediction.
+
+A dedicated R package will come soon. See also here <https://www.unige.ch/medecine/bioinformatics/home>
+
+# RNA-seq data
+
+GEO accession number: GSE270951
+
+<https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE270951>
+
+# Preparation
+
+## Libraries
+
+```{r warning=FALSE,echo=TRUE}
+
+library(SingleCellExperiment)
+library(HDF5Array)
+library(scuttle)
+library(ggplot2)
+library(Seurat)
+source("E:/Seq/unige/snRNA-seq_out/Upload/scripts/delayed.R")
+library(scml)
+library(scales)
+library(wesanderson)
+library(scico)
+library(RColorBrewer)
+library(dplyr)
+library(reshape2)
+
+```
+
+## Data
+
+Download the Seurat file (LINK) Change file path to load "L5ET-DEV_Abe_2024.rds" (*DOWNLOADFOLDER*/L5ET-DEV_Abe_2024.rds)
+
+```{r}
+L5ET <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/L5ET-DEV_Abe_2024.rds")
+
+DefaultAssay(L5ET) <- "SCT"
+```
+
+```{r Colors, echo=FALSE, message=FALSE, warning=FALSE}
+
+#colors for groups -> check and adjust if needed
+colAge <- brewer.pal(length(unique(L5ET$Age))+2, "Blues")[-c(1:2)]
+colreg <- wes_palette("GrandBudapest1", n = 4)
+colT18t <- wes_palette("Rushmore1", n = 3)
+colT18pn <- rev(wes_palette("Moonrise1", n = 4))
+col20pn <- wes_palette("Darjeeling2")
+colRetro <- c("grey60","black")
+HMinj <- colRetro
+names(HMinj) <- unique(L5ET$injSite)
+
+colpnCl <- c(rev(wes_palette("IsleofDogs2", n=4)), wes_palette("IsleofDogs1"))[1:length(unique(L5ET$cluster.id3))]
+
+colpid <- rev(wes_palette("Moonrise1"))
+HMpid <- colpid[1:3]
+names(HMpid) <- sort(unique(L5ET$cluster.id3_named2))
+
+HMcl <- colpnCl
+names(HMcl) <- sort(unique(L5ET$cluster.id3_named))
+
+HMT18t <- wes_palette("Rushmore1", n = 3)
+names(HMT18t)<- sort(unique(L5ET@meta.data$predicted.id))
+
+```
+
+## Load model: Subclass
+
+```{r }
+modelsc <- luz_load("E:/Seq/unige/snRNA-seq_out/Upload/data/aba_mouse_subclass_classifier_test.luz")
+
+```
+
+## Convert to SingleCellExperiment
+
+```{r include=FALSE}
+DefaultAssay(L5ET) <- "RNA"
+L5ET <- NormalizeData(L5ET, normalization.method = "LogNormalize", scale.factor = 10000, assay = "RNA")
+
+x <- as.SingleCellExperiment(L5ET)
+x <- logNormCounts(x)
+
+```
+
+## Predict subclass
+
+```{r include=FALSE}
+x$subclass_pred_scores <- predict_delayed(t(logcounts(x)),modelsc,ignore.case = TRUE)
+x$subclass_pred_label <- colnames(x$subclass_pred_scores)[max.col(x$subclass_pred_scores)]
+x$subclass_pred_label_conf <- rowQ(-x$subclass_pred_scores,2) - rowQ(-x$subclass_pred_scores,1)
+
+```
+
+## Load model: subtype (cluster)
+
+```{r}
+modelst <- luz_load("E:/Seq/unige/snRNA-seq_out/Upload/data/aba_mouse_cluster_classifier_pruned.luz")
+```
+
+```{r include=FALSE}
+
+x$cluster_pred_scores <- predict_delayed(t(logcounts(x)),modelst,ignore.case = TRUE)
+
+##changes: subclass -> subtype
+
+##pattern of string for subclass
+pat <- as.factor(sub("^((((.*) --- .*) --- .*) --- .*)$","\\2",colnames(x$cluster_pred_scores)))
+
+##subset on the subclass and get prediction scores for the predicted cluster
+scores <- sapply(levels(pat), \(l){
+  M <- x$cluster_pred_scores[,pat==l, drop=FALSE]
+  colnames(M)[max.col(M)]
+})
+
+x$cluster_pred_label <- scores[cbind(seq(nrow(scores)),match(x$subclass_pred_label,colnames(scores)))] 
+
+##subset on the subclass and get confidence values for the predicted cluster
+confs <- sapply(levels(pat), \(l){
+  M <- x$cluster_pred_scores[,pat==l, drop=FALSE]
+  if(ncol(M)>1){rowQ(-M,2) - rowQ(-M,1)}else{M*0}
+  
+})
+
+x$cluster_pred_label_conf <- confs[cbind(seq(nrow(confs)),match(x$subclass_pred_label,colnames(confs)))]
+
+x$cluster_pred_lev1 <- sub("^((((.*) --- .*) --- .*) --- .*)$","\\4",x$cluster_pred_label)
+x$cluster_pred_lev2 <- sub("^((((.*) --- .*) --- .*) --- .*)$","\\3",x$cluster_pred_label)
+x$cluster_pred_lev3 <- sub("^((((.*) --- .*) --- .*) --- .*)$","\\2",x$cluster_pred_label)
+x$cluster_pred_lev4 <- sub("^((((.*) --- .*) --- .*) --- .*)$","\\1",x$cluster_pred_label)
+```
+
+## Add meta data to Seurat object
+
+```{r include=FALSE}
+
+subcol <- c("subclass_pred_label","subclass_pred_label_conf","cluster_pred_label","cluster_pred_label_conf","cluster_pred_lev1", "cluster_pred_lev4","cluster_pred_lev2","cluster_pred_lev3")
+MetaPred <- as.data.frame(x@colData[,subcol])
+
+L5ET <- AddMetaData(L5ET, metadata = MetaPred)
+# dim(subset(L5ET@meta.data, cluster_pred_lev2!="Glutamatergic --- PT"))
+```
+
+```{r}
+L5ET@meta.data$cluster_pred_subtype <- gsub("(.*)--- ","\\2",L5ET$cluster_pred_label)
+```
+
+## Plots DNN predictions
+
+```{r warning=FALSE, fig.width=12, fig.height=7}
+DimPlot(L5ET, group.by = "subclass_pred_label")
+DimPlot(subset(L5ET, cluster_pred_lev2=="Glutamatergic --- PT"), group.by = "cluster_pred_subtype")& theme(legend.position = "bottom")
+
+DimPlot(subset(L5ET, cluster_pred_lev2!="Glutamatergic --- PT"), group.by = "cluster_pred_lev2")
+
+ggplot(L5ET@meta.data, aes(Age, fill=cluster_pred_lev2))+ geom_bar(position="fill")+facet_wrap(~injSite)
+
+ggplot(L5ET@meta.data, aes(1, fill=cluster_pred_lev2))+geom_bar(position="fill")+coord_polar(theta = "y")+ facet_wrap(~Age, ncol=3)
+
+
+ggplot(L5ET@meta.data, aes(cluster_pred_lev2,cluster_pred_label_conf, col=Age))+geom_boxplot()
+
+```
+
+```{r}
+
+local({
+ df <- subset(L5ET@meta.data, cluster_pred_lev2=="Glutamatergic --- PT")
+ df$predicted.id <- factor(df$predicted.id, levels = sort(unique(L5ET$predicted.id),decreasing = T))
+ 
+ 
+ 
+dfcol <- read.csv(file="E:/Seq/unige/snRNA-seq_out/Upload/data/HelperTable_DNNsubtype-ProjPred_mod.csv")
+  dfcol$predicted.dnn <- factor(dfcol$predicted.dnn, levels = dfcol$predicted.dnn)
+  # dfcol <- dfcol |> arrange(predicted.dnn)
+  
+  colp1 <- as.character(dfcol$ProjGroupCol[order(dfcol$predicted.dnn)])
+  # colp2 <- as.character(dfcol$ProjGroupCol)
+  # names(colp2) <- dfcol$predicted.dnn
+  
+  ##order
+  df$cluster_pred_subtype <- factor(df$cluster_pred_subtype, levels=dfcol$predicted.dnn)
+
+##Riverplot or Alluvial plots
+## get sample and cluster names
+# samples <- levels(factor(L5ET$pred.cluster2))
+# clusters <- levels(factor(L5ET$cluster_pred_lev4))
+samples <- levels(factor(rev(df$predicted.id)))
+clusters <- levels(factor(df$cluster_pred_subtype))
+
+## create named vector holding the color assignments for both samples and
+## clusters
+hue_pal()(60)
+# color_assignments <- setNames(
+#   c(colT18t[1:length(samples)], hue_pal()(60)[1:length(clusters)]),
+#   c(samples,clusters)
+# )
+
+
+
+color_assignments <- setNames(
+  c(rev(colT18t[1:length(samples)]), colp1[1:length(clusters)]),
+  c(samples,clusters)
+)
+
+## prepare data for the plot; factor() calls are necessary for the right order
+## of columns (first samples then clusters) and boxes within each column (
+## cluster 1, 2, 3, ..., not 1, 10, 11, ...)
+data <-  df %>%
+  group_by(predicted.id,cluster_pred_subtype) %>%
+  tally() %>%
+  ungroup() %>%
+  ggforce::gather_set_data(1:2) %>%
+  dplyr::mutate(
+    x = factor(x, levels = unique(x)),
+    y = factor(y, levels = unique(y))
+  )
+
+
+data_labels <- tibble(
+  group = c(
+    rep("Pred2", length(samples)),
+    rep("DNN23-Cell", length(clusters))
+  )
+) %>%
+  mutate(
+    hjust = ifelse(group == 'sample', 1, 0),
+    nudge_x = ifelse(group == 'sample', -0.1, 0.1)
+  )
+
+
+## create plot
+library(ggforce)
+p1 <- ggplot(data, aes(x, id = id, split = y, value = n)) +
+  geom_parallel_sets(aes(fill = cluster_pred_subtype), alpha = 0.75, axis.width = 0.15) +
+  geom_parallel_sets_axes(aes(fill = y), color = 'black', axis.width = 0.1) +
+  geom_text(
+    aes(y = n, split = y), stat = 'parallel_sets_axes', fontface = 'bold',
+    hjust = data_labels$hjust, nudge_x = data_labels$nudge_x
+  ) +
+   scale_x_discrete(labels = c("Tasic 2018","Yao-Cell-newDNN")) +
+  scale_fill_manual(values = color_assignments) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_blank(),
+    axis.text.x = element_text(face = 'bold', colour = 'black', size = 15),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank()
+  )
+print(p1)
+# ggsave(p1, device = "pdf", filename = paste0("RiverPlot_",Age2,"to",Age1,".pdf"),width = 3.3,height = 4.4, path = weg)
+  
+})
+
+```
+
+```{r subtype and projection,fig.height=10, fig.width=6}
+## 1st or 2nd maxima
+local({
+  
+  df <- subset(L5ET@meta.data, cluster_pred_lev2=="Glutamatergic --- PT")
+  M <- as.matrix(df[,c("prediction.score.VAL","prediction.score.SC","prediction.score.PG","prediction.score.IRN")])
+  colnames(M) <- c("TH","SC","P","MY")
+  X <- reshape2::melt(M)
+        X$cluster.id3 <- df$cluster.id3_named[X$Var1]
+        X$cluster.id3a <- df$cluster.id3_named2[X$Var1]
+        X$predicted.id <- df$predicted.id[X$Var1]
+        X$predicted.dnn <- df$cluster_pred_subtype[X$Var1]
+        X$region <- df$region[X$Var1]
+        X$Age <- df$Age[X$Var1]
+        
+  head(X)
+  
+
+  df1 <- X |> group_by(predicted.dnn,Var2) |> reframe(MeanSTructure=mean(value)) |> dcast(predicted.dnn~Var2) |> arrange(TH)
+  print(df1)
+  
+  dfcol <- read.csv(file="E:/Seq/unige/snRNA-seq_out/Upload/data/HelperTable_DNNsubtype-ProjPred_mod.csv")
+  dfcol$predicted.dnn <- factor(dfcol$predicted.dnn, levels = dfcol$predicted.dnn)
+  
+  p2a <- ggplot(melt(dfcol), aes(variable,predicted.dnn, fill=value))+geom_tile()+scale_fill_scico(palette = "grayC", direction = -1)+theme_minimal()+scale_y_discrete(limits=rev)
+  print(p2a)
+
+    
+  colp1 <- as.character(dfcol$ProjGroupCol[order(dfcol$predicted.dnn)])
+  
+  ##order
+  X$predicted.dnn <- factor(X$predicted.dnn, levels=dfcol$predicted.dnn)
+  df$cluster_pred_subtype <- factor(df$cluster_pred_subtype, levels=dfcol$predicted.dnn)
+  
+  pp <- ggplot(df, aes(cluster_pred_subtype, fill=injSite))+geom_bar(position="fill")+
+          scale_fill_manual(values=c("cornflowerblue", "midnightblue"))+  theme_minimal()+ scale_x_discrete(limits=rev) + coord_flip()
+  print(p2a+pp)
+  
+  
+  p2 <- ggplot(X,aes(x=Var2,y=value))+facet_wrap(~predicted.dnn,ncol = 3) +
+                stat_summary(geom = "bar",fun.y = mean,aes(fill=predicted.dnn)) +
+                stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+                theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+
+                  scale_fill_manual(values = colp1)+ theme_minimal()+RotatedAxis()+NoLegend()
+      
+       print(p2)
+  
+       columap <- dfcol$ProjGroupCol[order(as.character(dfcol$predicted.dnn))]
+       
+       p3 <- DimPlot(subset(L5ET, cluster_pred_lev2=="Glutamatergic --- PT" ), group.by = "cluster_pred_subtype")+scale_color_manual(values = columap)
+
+
+
+p4 <- ggplot(df, aes(Age, fill=cluster_pred_subtype))+ geom_bar(position="fill")+scale_fill_manual(values = colp1)+facet_wrap(~region)+theme_minimal()
+  print(p3/p4)
+  
+
+
+show_col(dfcol[order(dfcol$ProjGroup),]$ProjGroupCol,ncol = 1, labels = F)
+
+##focus on 252 and 254 over time
+dfx <- X |> subset(predicted.dnn=="252_L5 PT CTX" | predicted.dnn=="254_L5 PT CTX" )
+ggplot(dfx,aes(x=Var2,y=value,fill=Age))+facet_wrap(~predicted.dnn) +
+                geom_boxplot() +
+                theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+
+                  scale_fill_manual(values = colAge)+ theme_minimal()+RotatedAxis()+NoLegend()
+
+#toDo get max -> x axis value for prox to dist -> color code
+}
+)
+
+```

@@ -1,0 +1,354 @@
+---
+title: "Figures: Abe et al. 2024 (Nature)- scRNA-seq"
+author: "Philipp Abe"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+# RNA-seq data
+
+GEO accession number: GSE270951
+
+<https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE270951>
+
+# Preparation
+
+## Libraries
+
+```{r warning=FALSE,echo=TRUE}
+
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(wesanderson)
+library(scico)
+library(RColorBrewer)
+```
+
+## Data
+
+Download the Seurat file (RDS ) Change file path to load "L5ET-DEV_Abe_2024.rds" (*DOWNLOADFOLDER*/L5ET-DEV_Abe_2024.rds)
+
+```{r}
+L5ET <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/L5ET-DEV_Abe_2024.rds")
+
+DefaultAssay(L5ET) <- "SCT"
+```
+
+```{r Colors, echo=FALSE, message=FALSE, warning=FALSE}
+
+#colors for groups -> check and adjust if needed
+colAge <- brewer.pal(length(unique(L5ET$Age))+2, "Blues")[-c(1:2)]
+colreg <- wes_palette("GrandBudapest1", n = 4)
+colT18t <- wes_palette("Rushmore1", n = 3)
+colT18pn <- rev(wes_palette("Moonrise1", n = 4))
+col20pn <- wes_palette("Darjeeling2")
+colRetro <- c("grey60","black")
+HMinj <- colRetro
+names(HMinj) <- unique(L5ET$injSite)
+
+colpnCl <- c(rev(wes_palette("IsleofDogs2", n=4)), wes_palette("IsleofDogs1"))[1:length(unique(L5ET$cluster.id3))]
+
+colpid <- rev(wes_palette("Moonrise1"))
+HMpid <- colpid[1:3]
+names(HMpid) <- sort(unique(L5ET$cluster.id3_named2))
+
+HMcl <- colpnCl
+names(HMcl) <- sort(unique(L5ET$cluster.id3_named))
+
+HMT18t <- wes_palette("Rushmore1", n = 3)
+names(HMT18t)<- sort(unique(L5ET@meta.data$predicted.id))
+
+```
+
+# Figure 2
+
+## ET neurons have area-specific transcriptional dynamics during development.
+
+### UMAPs
+
+####Age and cortical area
+
+```{r Age_Region grouped}
+local({
+  L5ET$age.reg <- NA
+L5ET$age.reg<- paste0(L5ET@meta.data$Age,"_", L5ET@meta.data$region)
+unique(L5ET$age.reg)
+
+#https://colordesigner.io/gradient-generator
+colar <- c("#f1bb7b", "#cc9a61","#a77b49", "#845d31", "#62411b",
+           "#ff8385", "#ff7577", "#ff6769", "#fe585a", "#fc474b",
+           "#ac3733","#962e2a","#812522","#6c1c1a", "#581412",
+           "#ff8b45","#e97d3c","#d37034","#bd632c"#,"#a85624"
+           )
+names(colar) <- sort(unique(L5ET@meta.data$age.reg))
+
+p<- DimPlot(L5ET,group.by = "age.reg",cols = colar)+theme(panel.background = element_rect(fill = "grey95"))+NoAxes()
+print(p)
+
+p2 <- VlnPlot(L5ET, feature=c("nCount_RNA","nFeature_RNA","percent.mt"), group.by = "age.reg",cols = colar, pt.size = 0)
+print(p2)
+})
+
+
+
+```
+
+####Pseudotime and Pseudospace
+
+```{r}
+FeaturePlot(L5ET, features = "cv.time", pt.size = 1.5)+ scale_color_scico(palette = 'davos', direction = -1) +NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle("Pseudotime")
+
+FeaturePlot(L5ET, features = "cv.MSV.pred", pt.size = 1.5)+ scale_color_scico(palette = 'lajolla',direction = -1) +NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle("Pseudospace (MO>SS>VIS)")
+#scale_color_scico(palette = 'berlin',direction = -1)
+
+FeaturePlot(L5ET, features = "cv.time", split.by = "region")
+```
+
+### Transcriptional waves and landscapes
+
+Shiny
+
+### Spatial gene expression
+
+Shiny
+
+# Figure 3
+
+### Developmental molecular parcellation of ETprox and ETdist neurons
+
+AAV2-retro injection site: Pons: Basilar pons with cerebral peduncle fiber tract (rostral part of the corticospinal tract) SpC: Spinal cord with corticospinal tract Note: Collected were layer 5 cortical neurons positive for the AAV2-retro positive labeling (see methods)
+
+```{r}
+DimPlot(L5ET, group.by = "injSite", split.by = "injSite")+NoAxes()+NoLegend()+
+  scale_color_manual(values=c("cornflowerblue","midnightblue"))+
+  theme(panel.background = element_rect(fill = "grey95"))
+```
+
+Predicted L5 ET identity from Allen brain dataset (Tasic et. al, 2018 & Economo et. al, 2018)
+
+```{r}
+  FeaturePlot(L5ET, features = "prediction.score.L5.PT.ALM.Slco2a1")+scale_color_scico(palette = 'grayC', direction = -1) +NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Slco2a1")+NoLegend()
+  
+  FeaturePlot(L5ET, features = "prediction.score.L5.PT.ALM.Hpgd")+scale_color_scico(palette = 'grayC', direction = -1) +NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Hpgd")+NoLegend()
+  
+  FeaturePlot(L5ET, features = "prediction.score.L5.PT.ALM.Npsr1")+scale_color_scico(palette = 'grayC', direction = -1) +NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Npsr1")+NoLegend()
+  
+```
+
+L5ET types
+
+```{r}
+DimPlot(L5ET, group.by = "ETtype",cols=colT18t[c(3,1)])+NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))
+```
+
+Postnatal day 4 ##P4 only - 2 PT types 06/2023
+
+```{r subsetting P4}
+P4 <- subset(L5ET, Age=="P04")
+```
+
+##Intersect of viable feature between single and dual 10X indexes
+
+```{r warning=FALSE,echo=TRUE}
+###var.feature are in P4@assays$SCT@var.features
+#single index features
+var.featsi <- FindVariableFeatures(subset(P4, indexing=="single"), selection.method = "vst", nfeatures = 5000,assay="RNA")
+
+var.featsi <- var.featsi@assays$RNA@var.features
+
+#dual index features
+var.featdi <- FindVariableFeatures(subset(P4, indexing=="dual"), selection.method = "vst", nfeatures = 5000,assay="RNA")
+
+var.featdi <- var.featdi@assays$RNA@var.features
+
+gc()
+
+#intersect
+table(var.featdi %in% var.featsi)
+var.feat.sub <- intersect(var.featdi, var.featsi)
+table(var.feat.sub %in% P4@assays$SCT@var.features)
+
+
+# Normalize Dara in RNA slot
+DefaultAssay(P4) <- "RNA"
+P4 <- NormalizeData(P4, normalization.method = "LogNormalize", scale.factor = 10000, assay = "RNA") 
+
+# ## SCT and UMAP
+P4 <- SCTransform(P4, verbose = T,
+                    residual.features = var.feat.sub,
+                    # vars.to.regress = "seq_batch",
+                     ncells = 10000,return.only.var.genes = F)
+```
+
+```{r warning=FALSE,echo=TRUE}
+
+P4 <- RunPCA(P4, verbose = T,
+               # features = var.feat.sub
+               )
+
+# P4 <- RunICA(P4, verbose = T)
+P4 <- RunUMAP(P4, dims = 1:30, reduction = "pca", #features = var.feat.sub,
+                n.components = 2L) #check 2D or 3D embeddings-> here 2D, in 3D P4 and P8 are orthogonal
+
+P4 <- FindNeighbors(P4, dims = 1:30,reduction = "pca")
+P4 <- FindClusters(P4)
+
+table(P4$Age,P4$seurat_clusters)
+
+
+```
+
+```{r Standard UMAPs P4}
+DimPlot(P4, label = T)
+DimPlot(P4, group.by = "injSite")
+DimPlot(P4, group.by = "indexing")
+DimPlot(P4, group.by = "predicted.id", cols = colT18t)
+```
+
+ETupper and lower merge (04.2023)
+
+```{r 2 t-types UMAP bar,eval=FALSE,warning=FALSE,echo=TRUE}
+
+
+local({
+  P4@meta.data$PTtype <- "NA"
+P4@meta.data[which(P4@meta.data$predicted.id=="L5 PT ALM Hpgd"),]$PTtype <- "L5 ET proximal"
+P4@meta.data[which(P4@meta.data$predicted.id=="L5 PT ALM Npsr1"),]$PTtype <- "L5 ET proximal"
+P4@meta.data[which(P4@meta.data$predicted.id=="L5 PT ALM Slco2a1"),]$PTtype <- "L5 ET distal"
+# colpt <- c("midnightblue", "darkred")
+colpt <- c(colT18t[3],colT18t[1])
+names(colpt) <- unique(P4$PTtype)
+
+p1 <- (DimPlot(P4, group.by = "PTtype", cols = colpt)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+NoLegend())
+
+
+p2 <- (DimPlot(P4, group.by = "region", cols = colreg)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+NoLegend())
+
+
+p3 <- (DimPlot(P4, group.by = "cluster.id3_named2", cols = colpid)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+NoLegend())
+
+
+p4 <- (DimPlot(P4, group.by = "injSite", cols = c("cornflowerblue", "midnightblue"))+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+NoLegend())
+
+p5 <- (DimPlot(P4, label = T)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+NoLegend())
+
+print(p1); print(p2); print(p3); print(p4); print(p5)
+
+  ptypes <- unique(P4$PTtype)
+  for(i in ptypes){
+  p <-  (DimPlot(P4, group.by = "PTtype", cells.highlight = rownames(subset(P4@meta.data, PTtype==i)),cols.highlight = colpt[i], cols = "grey70")+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle(i)+NoLegend())
+  print(p)
+  
+  }
+
+  #Bar/area plot
+  
+  df1<- P4@meta.data
+  p1<- (ggplot(df1, aes(Age, fill=PTtype))+geom_bar(position="fill")+ facet_wrap(~region, ncol = 4)+
+  scale_fill_manual(values=colpt)+theme_classic()+scale_y_reverse()+theme_void())
+  print(p1)
+  
+  
+#prediction value (color "oslo", direction = -1 and "bilbao")
+  print(FeaturePlot(P4, features = c("prediction.score.L5.PT.ALM.Slco2a1", "prediction.score.L5.PT.ALM.Hpgd"), blend = TRUE))
+  p2<-FeaturePlot(P4, features = "prediction.score.L5.PT.ALM.Slco2a1")+scale_color_scico(palette = 'grayC', direction = -1) +NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Slco2a1")
+  p3<-FeaturePlot(P4, features = "prediction.score.L5.PT.ALM.Hpgd")+scale_color_scico(palette = 'grayC', direction = -1)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Hpgd")
+  p4<-FeaturePlot(P4, features = "prediction.score.L5.PT.ALM.Npsr1")+scale_color_scico(palette = 'grayC', direction = -1)+NoAxes()+
+  theme(panel.background = element_rect(fill = "grey95"))+ggtitle("PT-Npsr1")
+  print(p2);print(p3);print(p4)
+  
+})
+```
+
+# Extended Data Figure 3
+
+## Capturing the transcriptional dynamics of ET neurons in space and time.
+
+```{r UMAPs}
+DimPlot(L5ET, label=T)+theme(panel.background = element_rect(fill = "grey95"))
+
+##If not in Meta.data: assignment of Supertypes
+# Tsuper <- read.csv(file="E:/Seq/unige/snRNA-seq_out/Upload/data/DNN2023_Subclass-cluster_pred_subtype.csv")
+# L5ET@meta.data$cluster_pred_subtype <- gsub("(.*)--- ","\\2",L5ET$cluster_pred_label)
+# L5ET@meta.data$cluster_pred_supertype <- 
+#   Tsuper$supertype[match(L5ET@meta.data$cluster_pred_subtype,Tsuper$Var1)]
+
+DimPlot(subset(L5ET, cluster_pred_lev2=="Glutamatergic --- PT" ), group.by = "cluster_pred_supertype")+scale_color_manual(values = wes_palette("Darjeeling2"))
+
+ggplot(subset(L5ET@meta.data, cluster_pred_lev2=="Glutamatergic --- PT" ), aes(Age, fill=cluster_pred_supertype))+ geom_bar(position="fill")+scale_fill_manual(values =  wes_palette("Darjeeling2"))+facet_wrap(~region)
+```
+
+```{r UMAPs Space}
+DimPlot(L5ET, group.by = "region",cols=colreg)+NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))
+
+ggplot(L5ET@meta.data, aes(region,cv.MSV, fill=region))+geom_boxplot()+scale_fill_manual(values = colreg[c(1,2,4)])+theme_minimal()+
+ggplot(L5ET@meta.data, aes(region,cv.MOS, fill=region))+geom_boxplot()+scale_fill_manual(values = colreg)+theme_minimal()+
+  ggplot(L5ET@meta.data, aes(region,cv.SSV, fill=region))+geom_boxplot()+scale_fill_manual(values = colreg[c(2:4)])+theme_minimal()
+```
+
+```{r}
+DimPlot(L5ET, group.by = "Age",cols=colAge)+NoAxes()+ theme(panel.background = element_rect(fill = "grey95"))
+ggplot(L5ET@meta.data, aes(Age,cv.time, fill=Age))+geom_boxplot()+scale_fill_manual(values = colAge)+theme_minimal()
+```
+
+# Extended Data Figure 4.
+
+## Identifying ET subtypes by using transcription-based label transfer.
+
+T18-t-types HM
+
+```{r T18-t-types HM,  fig.height=10, fig.width=4}
+library(ComplexHeatmap)
+local({
+  
+  HMage <- brewer.pal(length(unique(L5ET$Age))+2, "Blues")[-c(1:2)]
+names(HMage)<- sort(unique(L5ET@meta.data$Age))
+
+HMreg <- as.character(wes_palette("GrandBudapest1", n = 4))
+names(HMreg)<- unique(L5ET@meta.data$region)
+# HMreg <- unlist(HMreg)
+
+HMT18t <- as.character(wes_palette("Rushmore1", n = 3))
+names(HMT18t)<- sort(unique(L5ET@meta.data$predicted.id))
+
+HMT18pn <- c(rev(wes_palette("Moonrise1", n = 4)))
+names(HMT18pn)<- sort(unique(L5ET@meta.data$predicted.projection))
+
+HM20pn <- wes_palette("Darjeeling2", n=5)
+names(HM20pn)<- unique(L5ET@meta.data$pred.proj)
+HM20pn <- unlist(as.list(HM20pn))
+
+HMse <- hue_pal()(length(unique(L5ET$seurat_clusters)))
+names(HMse) <- sort(unique(L5ET$seurat_clusters))
+
+  O <- as.matrix(L5ET@meta.data[,c("prediction.score.L5.PT.ALM.Slco2a1","prediction.score.L5.PT.ALM.Npsr1","prediction.score.L5.PT.ALM.Hpgd")])
+
+  Heatmap(O,col=brewer.pal(9,"Greys"), row_title = "single nuclei", show_row_names =  F, 
+                        column_title = "Ai2018_ALM_Projection.prediction.score",
+                        # row_split = data.frame(L5ET$predicted.id),
+                        row_split = data.frame(L5ET$predicted.id),
+                        cluster_row_slices = FALSE, cluster_column_slices = FALSE,column_dend_reorder = FALSE,
+                        show_row_dend = F, row_dend_reorder = FALSE,
+                        
+                        right_annotation = rowAnnotation(Age=L5ET@meta.data$Age, Proj3Cl=L5ET@meta.data$cluster.id3_named2, 
+                                                         Area=L5ET@meta.data$region,InjSite=L5ET@meta.data$injSite,
+                                                         col=list(Age=HMage,Proj3Cl=HMpid, Area=HMreg,InjSite=HMinj)),
+                        left_annotation = rowAnnotation(T18type=L5ET$predicted.id,col=list(T18type=HMT18t)))
+  
+  
+})
+```
