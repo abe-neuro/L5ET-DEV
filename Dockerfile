@@ -19,7 +19,7 @@ USER ${NB_USER}
 ## Install R packages
 RUN install2.r --error --skipinstalled -n 4 devtools torch luz BiocManager Seurat scales wesanderson scico RColorBrewer reshape2
 RUN Rscript -e 'torch::install_torch();devtools::install_github("BioinfoSupport/scml",upgrade = FALSE)'
-RUN Rscript -e 'BiocManager::install("DelayedArray","SingleCellExperiment","HDF5Array","scuttle")'
+RUN Rscript -e 'BiocManager::install(c("DelayedArray","SingleCellExperiment","HDF5Array","scuttle"))'
 
 
 
