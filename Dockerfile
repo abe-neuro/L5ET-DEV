@@ -24,4 +24,4 @@ USER ${NB_USER}
 
 
 ## Copy files to home folder
-COPY --chown=${NB_USER} ./ /home/${NB_USER}/
+#COPY --chown=${NB_USER} ./ /home/${NB_USER}/
