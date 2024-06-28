@@ -1,0 +1,700 @@
+---
+title: "L5 ET MAPseq mapping anaylsis: Abe et al. 2024 (Nature)"
+author: "Philipp Abe"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+# MAPseq data
+
+<https://github.com/abe-neuro/L5ET-DEV/tree/main/data> or GEO server (see publication for reference)
+
+Data set was quality controlled and L5 ET neurons were selected.
+
+# Preparation
+
+## Libraries
+
+```{r warning=FALSE,message=FALSE,echo=TRUE}
+
+library(viridis)
+library(IRanges)
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(matrixStats)
+library(plyr)
+library(dplyr)
+library(stringr)
+library(gridExtra)
+library(RColorBrewer)
+library(Biostrings)
+library(ComplexHeatmap)
+library(wesanderson)
+library(scico)
+library(patchwork)
+
+library(cluster)
+library(factoextra)
+
+rm(list = ls())
+
+```
+
+```{r Colors, echo=TRUE, message=FALSE, warning=FALSE}
+
+custom_colors <- list()
+
+colors_dutch <- c(
+  '#FFC312','#C4E538','#12CBC4','#FDA7DF','#ED4C67',
+  '#F79F1F','#A3CB38','#1289A7','#D980FA','#B53471',
+  '#EE5A24','#009432','#0652DD','#9980FA','#833471',
+  '#EA2027','#006266','#1B1464','#5758BB','#6F1E51'
+)
+
+colors_spanish <- c(
+  '#40407a','#706fd3','#f7f1e3','#34ace0','#33d9b2',
+  '#2c2c54','#474787','#aaa69d','#227093','#218c74',
+  '#ff5252','#ff793f','#d1ccc0','#ffb142','#ffda79',
+  '#b33939','#cd6133','#84817a','#cc8e35','#ccae62'
+)
+
+custom_colors$discrete <- c(colors_dutch, colors_spanish)
+
+```
+
+## Data
+
+Download the RDS file (LINK) and change file path to load "MAPseq_filteredbyClusterL5ET_012022.rds" (*DOWNLOADFOLDER*/MAPseq_filteredbyClusterL5ET_012022.rds)
+
+Comment: P21, P28, S2 and outliers excluded
+
+```{r load data, echo=TRUE}
+
+N1 <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/MAPseq_filteredbyClusterL5ET_012022.rds")
+
+#select control (exclude Enuc)
+N1 <- subset(N1, cond=="control")
+
+#merge Scord (C+T+L)
+N1$SpC <- rowSums(N1[,c("Scord_C", "Scord_T", "Scord_L")]) 
+
+##set L5ET targets
+Targets <- c("TH", "SC",  "P",   "MY",  "SpC")
+#Targets <- c("TH","RN", "SC",  "P",   "MY",  "SpC")
+# Targets <- c("TH","SC","RN","P","MY","ScordC","ScordL")
+
+
+##optional: threshold on injection site
+# N1 <- subset(N1, Inj>250)
+
+##optional: exclude outlier
+N1 <- subset(N1, ! (pup=="Con3C-A" | pup=="Con3C-C" | pup=="Enuc7C2_P56"  | pup=="Enuc6C2" | age=="P21" | age=="P28" | inj2=="S2"))
+
+#length(N1$pup)
+#head(N1)
+
+table(N1$age,N1$inj2)
+
+```
+
+```{r Data prep,echo=TRUE}
+N2 <- N1
+
+##Matrix with row sum of 1 -> relative distribution
+M <- as.matrix(N2[,Targets])
+M <- M[!rowSums(M[,Targets])==0,]
+M <- (M[,Targets])/
+  rowSums((M[,Targets]))
+table(is.na(M[complete.cases(M), ]))
+
+N2 <- N2[rownames(N2) %in% rownames(M),]
+```
+
+```{r col age}
+colAge <- brewer.pal(length(unique(N2$age))+2, "Blues")[-c(1:2)]
+```
+
+## Single targets
+
+###For Extended data figure 2b
+
+Including red nucleus \[RN\] and sub-segements of spinal cord (Scord): C=cervical, T=thoracic, L=lumbar
+
+```{r echo=TRUE}
+local({
+  Targets <- c("TH","SC","RN","P","MY","Scord_C","Scord_T","Scord_L")
+   dtf <- as.data.frame(N2[,Targets])
+  dtf <- dtf[!rowSums(dtf[,Targets])==0,]
+  dtf <- (dtf[,Targets])/
+    rowSums((dtf[,Targets]))
+  
+  thresh <- 0.2
+dtf$TH <- ifelse(dtf$TH>thresh,1,0)
+
+dtf$RN <- ifelse(dtf$RN>thresh,1,0)
+
+dtf$SC <- ifelse(dtf$SC>thresh,1,0)
+dtf$P <- ifelse(dtf$P>thresh,1,0)
+dtf$MY <- ifelse(dtf$MY>thresh,1,0)
+#dtf$SpC <- ifelse(dtf$SpC>thresh,1,0)
+dtf$SpC_C <- ifelse(dtf$Scord_C>thresh,1,0)
+dtf$SpC_T <- ifelse(dtf$Scord_T>thresh,1,0)
+dtf$SpC_L <- ifelse(dtf$Scord_L>thresh,1,0)
+dtf$targetNo <- rowSums(dtf[,c(Targets)])
+dtf$RelTargetNo <- rowSums(dtf[,c(Targets)])/(length(Targets))
+dtf$age <-N2$age
+dtf$inj2 <- N2$inj2
+
+colsingle<- c("grey","darkred")
+##Target perspective
+p3 <-ggplot(dtf, aes(age, fill=as.factor(TH)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend()+ggtitle("all-L5ET with TH projection")
+p3b <-ggplot(dtf, aes(age, fill=as.factor(RN)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend()+ggtitle("all-L5ET with RN projection")
+p4 <-ggplot(dtf, aes(age, fill=as.factor(SC)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SC projection")
+p5 <-ggplot(dtf, aes(age, fill=as.factor(P)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with P projection")
+p6 <-ggplot(dtf, aes(age, fill=as.factor(MY)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with MY projection")
+#p7 <-ggplot(dtf, aes(age, fill=as.factor(SpC)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+#    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC projection")
+p8 <-ggplot(dtf, aes(age, fill=as.factor(SpC_C)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC-C projection")
+p9 <-ggplot(dtf, aes(age, fill=as.factor(SpC_T)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC-T projection")
+p10 <-ggplot(dtf, aes(age, fill=as.factor(SpC_L)))+geom_bar(position="fill")+ facet_wrap(~inj2)+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC-L projection")
+
+print((p3+p3b+p4) / (p5+p6+p8)+ plot_annotation(
+  title = 'Individual Targeting - All ET neurons',
+  subtitle = paste0("Threshold: ",thresh),
+  caption = paste0(Sys.Date())))
+
+print((p8+p9+p10)+ plot_annotation(
+  title = 'Individual Targeting - All ET neurons',
+  subtitle = paste0("Threshold: ",thresh),
+  caption = paste0(Sys.Date())))
+
+p <-ggplot(dtf, aes(age, fill=as.factor(SpC_C)))+geom_bar(position="fill")+
+    scale_fill_manual(values=colsingle)+theme_classic()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC-C projection")
+print(p+plot_annotation(
+  title = 'Individual Targeting - All ET neurons',
+  subtitle = paste0("Threshold: ",thresh),
+  caption = paste0(Sys.Date())))
+
+p1 <-ggplot(dtf, aes(1, fill=as.factor(SpC_C)))+geom_bar(position="fill")+
+  facet_wrap(~age, nrow = 1)+coord_polar(theta = "y")+
+    scale_fill_manual(values=colsingle)+theme_void()+Seurat::NoLegend() +ggtitle("all-L5ET with SpC-C projection")
+print(p1)
+table(dtf$SpC_C,dtf$age)
+})
+```
+
+## CLARA clustering
+
+load previous calculation (CLARA results of 9cluster with merged SpC segments,without RN, S2, and outlier (6C2-P2128Out) version-092022)
+
+```{r 9 cluster,echo=TRUE}
+clara.res <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/MAPseq_L5ET-CLARAresults9cluster_092022.rds") #092022 without RN -> extra script for RN
+
+N2$ClaraCl <- clara.res$cluster
+
+
+fviz_cluster(clara.res, geom = "point")
+
+table(N2$age, N2$ClaraCl)
+
+##orginal code for clustering
+#clara.res <- clara(M, 9, samples = 100000, pamLike = TRUE)
+
+```
+
+```{r Overview 9 cluster,echo=TRUE}
+table(N2$age,N2$ClaraCl)
+cl.cols <- colors_spanish[1:(length(unique(N2$ClaraCl)))]#brewer.pal(9, "Paired")
+names(cl.cols)<- unique(N2$ClaraCl)
+
+
+local({
+
+  X <-reshape2:: melt(M)
+  X$Cluster <- N2$ClaraCl[X$Var1]
+  X$inj <- N2$inj2[X$Var1]
+  X$age <- N2$age[X$Var1]
+ 
+  
+  p <- ggplot(X,aes(x=Var2,y=value))+facet_wrap(~Cluster,nrow = 2) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(Cluster))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl.cols)
+  p1 <- ggplot(X,aes(x=Var2,y=value))+facet_wrap(~Cluster*age,nrow = 2) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(Cluster))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl.cols)
+  p2 <- (ggplot(N2, aes(age, fill=as.factor(ClaraCl)))+geom_bar(position="fill")+ scale_fill_manual(values=cl.cols))+
+    (ggplot(N2, aes(inj2, fill=as.character(ClaraCl)))+geom_bar(position="fill")+facet_wrap(~age)+
+    scale_fill_manual(values = cl.cols))
+  
+  #Plot all BC of age are set 100% > how distibute across cluster
+  d1 <- N2 %>%   group_by(age) %>% dplyr::summarise(totcount=n())
+  
+    d2 <- N2 %>%   group_by(age, ClaraCl) %>% dplyr::summarise(count=n())
+    d2$totcount <- d1$totcount[match(d2$age, d1$age)] #check here
+    d2$relToReg <- d2$count/d2$totcount
+    d2$P <- as.numeric(substring(d2$age,2))
+    
+   p3 <- ggplot(d2, aes(x=as.character(ClaraCl),y=relToReg, fill=age))+geom_bar(stat="identity", position = "dodge")+
+    theme_classic(base_line_size = 0) +scale_fill_manual(values = colAge)
+  
+   p4 <- ggplot(d2, aes(x=P,y=relToReg, col=as.character(ClaraCl)))+geom_smooth(stat="identity")+
+  facet_wrap(~ClaraCl)+scale_color_manual(values = cl.cols)+theme_classic(base_line_size = 0)
+  
+  
+  print(p)
+  print(p1)
+  print(p2)
+  print(p3)
+  print(p4)
+  })
+```
+
+```{r 5 clusters, echo=TRUE}
+clara.res5 <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/MAPseq_L5ET-CLARAresults5cluster_092022.rds")
+
+N2$ClaraCl5 <- clara.res5$cluster
+
+
+table(N2$ClaraCl,N2$ClaraCl5)
+```
+
+```{r 5 cluster plots,echo=TRUE}
+table(N2$age,N2$ClaraCl5)
+cl.cols <- colors_spanish[1:(length(unique(N2$ClaraCl5)))]#brewer.pal(9, "Paired")
+names(cl.cols)<- unique(N2$ClaraCl5)
+
+# cl.cols <- scico(n = (length(unique(N2$ClaraCl5))),palette = "cork")#brewer.pal(9, "Paired")
+# names(cl.cols)<- unique(N2$ClaraCl5)
+
+local({
+  # reorder levels of 1st clusters for visulalization
+  # dd$ClaraCl <- factor( dd$ClaraCl,levels( dd$ClaraCl)[h$order])
+  X <-reshape2:: melt(M)
+  X$Cluster <- N2$ClaraCl5[X$Var1]
+  X$inj <- N2$inj2[X$Var1]
+  X$age <- N2$age[X$Var1]
+  # X$cluster.id4 <- N1$cluster.id4[X$Var1]
+  p <- ggplot(X,aes(x=Var2,y=value))+facet_wrap(~Cluster,nrow = 2) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(Cluster))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl.cols)
+  p1 <- ggplot(X,aes(x=Var2,y=value))+facet_wrap(~Cluster*age,nrow = 2) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(Cluster))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl.cols)
+  p2 <- (ggplot(N2, aes(age, fill=as.factor(ClaraCl5)))+geom_bar(position="fill")+ scale_fill_manual(values=colors_spanish))+
+    (ggplot(N2, aes(inj2, fill=as.character(ClaraCl5)))+geom_bar(position="fill")+facet_wrap(~age)+
+    scale_fill_manual(values = cl.cols))
+  
+  #Plot all BC of age are set 100% > how distibute across cluster
+  d1 <- N2 %>%   group_by(age) %>% dplyr::summarise(totcount=n())
+  
+    d2 <- N2 %>%   group_by(age, ClaraCl5) %>% dplyr::summarise(count=n())
+    d2$totcount <- d1$totcount[match(d2$age, d1$age)] #check here
+    d2$relToReg <- d2$count/d2$totcount
+    d2$P <- as.numeric(substring(d2$age,2))
+    
+   p3 <- ggplot(d2, aes(x=as.character(ClaraCl5),y=relToReg, fill=age))+geom_bar(stat="identity", position = "dodge")+
+    theme_classic(base_line_size = 0) +scale_fill_manual(values = colAge)
+  
+   p4 <- ggplot(d2, aes(x=P,y=relToReg, col=as.character(ClaraCl5)))+geom_smooth(stat="identity")+
+  facet_wrap(~ClaraCl5)+scale_color_manual(values = cl.cols)+theme_classic(base_line_size = 0)
+  
+  
+  print(p)
+  print(p1)
+  print(p2)
+  print(p3)
+  print(p4)
+  })
+
+
+```
+
+```{r 5 cluster to name,echo=TRUE}
+N2$cl_named <- NA
+N2[N2$ClaraCl5==1,]$cl_named <- "1_Proximal"
+N2[N2$ClaraCl5==4,]$cl_named <- "2_Proximal"
+N2[N2$ClaraCl5==5,]$cl_named <- "3_Pons"
+N2[N2$ClaraCl5==3,]$cl_named <- "4_Distal"
+N2[N2$ClaraCl5==2,]$cl_named <- "5_Distal"
+
+cl5.cols <- scico(n = (length(unique(N2$cl_named))),palette = "cork")#brewer.pal(9, "Paired")
+names(cl5.cols)<- sort(unique(N2$cl_named))
+
+local({
+  Nm <-reshape2:: melt(M)
+  #Nm$ClaraCl <- N2$ClaraCl5[Nm$Var1]
+  Nm$ClaraCl <- N2$cl_named[Nm$Var1]
+  Nm$inj <- N2$inj2[Nm$Var1]
+  Nm$age <- N2$age[Nm$Var1]
+  
+  Nm <-  Nm %>%   group_by(ClaraCl,Var2) %>% dplyr::mutate(mean=mean(value)) #optimize code for grouping -> HM
+  
+  p <- ggplot(Nm,aes(x=Var2,y=value))+facet_wrap(~ClaraCl,nrow = 2) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(ClaraCl))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl5.cols)+theme_minimal()
+
+  p1 <- ggplot(Nm %>%   group_by(ClaraCl,Var2) %>% dplyr::summarise(mean=mean(value)),
+               aes(x=as.factor(Var2),y=ClaraCl, fill= mean)) + 
+    geom_tile() + scale_fill_distiller(palette = "Greys",direction = 1)+
+    theme_minimal(base_size = 16)
+  
+  p2 <- (ggplot(Nm, aes(age, fill=as.factor(ClaraCl)))+geom_bar(position="fill")+ scale_fill_manual(values=cl5.cols))/
+      (ggplot(Nm, aes(inj, fill=as.character(ClaraCl)))+geom_bar(position="fill")+facet_wrap(~age, nrow = 1)+
+      scale_fill_manual(values = cl5.cols)+theme_classic()+Seurat::NoLegend())
+  p2b <- ggplot(Nm, aes(age, fill=as.character(ClaraCl)))+geom_bar(position="fill")+facet_wrap(~inj, nrow = 1)+
+      scale_fill_manual(values = cl5.cols)+theme_classic()+Seurat::NoLegend()
+
+   print(p)
+   print(p1)
+   print(p2); print(p2b)
+   
+  #Plot all BC of age are set 100% > how distibute across cluster
+    d1 <- N2 %>%   group_by(age) %>% dplyr::summarise(totcount=n())
+    
+      d2 <- N2 %>%   group_by(age, cl_named) %>% dplyr::summarise(count=n())
+      d2$totcount <- d1$totcount[match(d2$age, d1$age)] #check here
+      d2$relToReg <- d2$count/d2$totcount
+      d2$P <- as.numeric(substring(d2$age,2))
+      
+    ##Version by animals -> take this
+       
+      d1 <- N2 %>%   group_by(age, cl_named, pup) %>% dplyr::summarise(Count=n())
+      d1 <- d1 %>%   group_by(pup) %>% dplyr::mutate(totcount=sum(Count))
+      d1$relToReg <- d1$Count/d1$totcount
+      d1$P <- as.numeric(substring(d1$age,2))
+      
+  
+    p3<-  ggplot(d2, aes(x=as.character(cl_named),y=relToReg, fill=age))+geom_bar(stat="identity", position = "dodge")+
+      theme_classic(base_line_size = 0) +scale_fill_manual(values = colAge)
+    
+     p4 <- ggplot(d2, aes(x=P,y=relToReg, col=as.character(cl_named)))+geom_smooth(stat="identity")+
+    facet_wrap(~cl_named, ncol = 1)+
+       scale_color_manual(values = cl5.cols)+theme_classic(base_line_size = 0)
+     
+     p4b <- ggplot(d2, aes(x=as.numeric(as.factor(age)),y=relToReg, col=as.character(cl_named)))+geom_smooth(span=1, size=2, se=F)+
+    facet_wrap(~cl_named, nrow = 1)+
+       scale_color_manual(values = cl5.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+     
+     p4c <- ggplot(d1, aes(x=age,y=relToReg, col=as.character(cl_named)))+ geom_point()+
+       geom_smooth(aes(x=as.numeric(as.factor(age)),y=relToReg),span=1, size=2, se=T)+
+    facet_wrap(~cl_named, nrow = 1,scales = "free_y")+
+       scale_color_manual(values = cl5.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+  
+     p <- ggplot(Nm,aes(x=Var2,y=value))+facet_wrap(~ClaraCl,nrow = 1) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(ClaraCl))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl5.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Projection strength")+xlab("Target")
+     
+  print(p3)
+  print(p)
+  print(p4)
+  print(p+p4c)
+  print(p4b/p4c)
+  
+  pbp <- ggplot(Nm,aes(x=Var2,y=value, fill=ClaraCl))+facet_wrap(~ClaraCl,nrow = 1) +
+    # geom_boxplot() +
+    geom_violin(trim = FALSE)+stat_summary(
+    fun.data = "mean_sdl",  fun.args = list(mult = 1), 
+    geom = "pointrange", color = "black"
+    )+
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = cl5.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Projection strength")+xlab("Target")
+print(pbp)
+
+print(table(Nm$ClaraCl))
+     })
+
+
+scico_palette_show(palettes = "cork")
+```
+
+## Pooling: 3 clusters
+
+```{r P D pooled,echo=TRUE}
+N2$cl_pooled <- NA
+N2[N2$ClaraCl5==1,]$cl_pooled <- "Proximal"
+N2[N2$ClaraCl5==4,]$cl_pooled <- "Proximal"
+N2[N2$ClaraCl5==5,]$cl_pooled <- "Pons"
+N2[N2$ClaraCl5==3,]$cl_pooled <- "Distal"
+N2[N2$ClaraCl5==2,]$cl_pooled <- "Distal"
+
+N2$cl_pooled <- factor(N2$cl_pooled, levels = c("Proximal","Pons","Distal"))
+```
+
+```{r pooled plots}
+clp.cols <- c(wes_palette("IsleofDogs2")[1],wes_palette("IsleofDogs2")[4],wes_palette("IsleofDogs2")[3])#brewer.pal(9, "Paired")
+names(clp.cols)<- sort(unique(N2$cl_pooled))
+
+local({
+  Nm <-reshape2:: melt(M)
+  #Nm$ClaraCl <- N2$ClaraCl5[Nm$Var1]
+  Nm$ClaraCl <- N2$cl_pooled[Nm$Var1]
+  Nm$inj <- N2$inj2[Nm$Var1]
+  Nm$age <- N2$age[Nm$Var1]
+  
+  ##Subsetting
+  
+  Nm <-  Nm %>%   group_by(ClaraCl,Var2) %>% dplyr::mutate(mean=mean(value)) #optimize code for grouping -> HM
+  
+  p <- ggplot(Nm,aes(x=Var2,y=value))+facet_wrap(~ClaraCl,ncol = 1) +
+    stat_summary(geom = "bar",fun.y = mean,aes(fill=as.character(ClaraCl))) +
+    stat_summary(geom = "errorbar",fun.ymin=function(v) max(0,mean(v) - sd(v)),fun.ymax=function(v) mean(v) + sd(v),width=0.3) +
+    theme(axis.text.x = element_text(angle=90,hjust = 1,vjust=0.5),legend.position="none")+scale_x_discrete(limits=Targets)+
+    scale_fill_manual(values = clp.cols)+theme_minimal(base_size = 16)+Seurat::NoLegend()+ylab("Projection strength")+xlab("Target")
+
+  p1 <- ggplot(Nm %>%   group_by(ClaraCl,Var2) %>% dplyr::summarise(mean=mean(value)),
+               aes(x=as.factor(Var2),y=ClaraCl, fill= mean)) + 
+    geom_tile() + scale_fill_scico(palette = "lajolla",direction = -1)+
+    # scale_fill_distiller(palette = "Greys",direction = 1)+
+    theme_minimal(base_size = 16)
+  p1b <- ggplot(Nm %>%   group_by(ClaraCl,Var2,age) %>% dplyr::summarise(mean=mean(value)),
+               aes(x=as.factor(Var2),y=ClaraCl, fill= mean)) + facet_wrap(~age, nrow = 1)+
+    geom_tile() + scale_fill_scico(palette = "lajolla",direction = -1)+
+    # scale_fill_distiller(palette = "Greys",direction = 1)+
+    theme_minimal(base_size = 16)
+  
+  p2 <- ((ggplot(Nm, aes(age, fill=as.factor(ClaraCl)))+geom_bar(position="fill")+ scale_fill_manual(values=clp.cols))/
+      (ggplot(Nm, aes(inj, fill=as.character(ClaraCl)))+geom_bar(position="fill")+facet_wrap(~age, nrow = 1)+
+      scale_fill_manual(values = clp.cols)+theme_classic()+Seurat::NoLegend()))+
+    (ggplot(Nm, aes(1, fill=as.factor(ClaraCl)))+geom_bar(position="fill")+ facet_wrap(~age, nrow = 1)+
+  coord_polar(theta = "y")+scale_fill_manual(values=clp.cols)+theme_void())
+  
+  
+  ggplot(N2, aes(1, fill=cl_pooled))+geom_bar(position="fill")+
+  facet_wrap(~age, nrow = 1)+
+  coord_polar(theta = "y")+ scale_fill_manual(values=colAge)+
+  theme_void() + scale_fill_manual(values = clp.cols)
+  
+
+   print(p)
+   print(p1); print(p1b)
+   print(p2)
+   
+  #Plot all BC of age are set 100% > how distibute across cluster
+    d1 <- N2 %>%   group_by(age) %>% dplyr::summarise(totcount=n())
+    
+      d2 <- N2 %>%   group_by(age, cl_pooled) %>% dplyr::summarise(count=n())
+      d2$totcount <- d1$totcount[match(d2$age, d1$age)] #check here
+      d2$relToReg <- d2$count/d2$totcount
+      d2$P <- as.numeric(substring(d2$age,2))
+      
+    ##Version by animals -> take this
+       
+      d1 <- N2 %>%   group_by(age, cl_pooled, pup) %>% dplyr::summarise(Count=n())
+      d1 <- d1 %>%   group_by(pup) %>% dplyr::mutate(totcount=sum(Count))
+      d1$relToReg <- d1$Count/d1$totcount
+      d1$P <- as.numeric(substring(d1$age,2))
+      
+  
+    p3<-  ggplot(d2, aes(x=as.character(cl_pooled),y=relToReg, fill=age))+geom_bar(stat="identity", position = "dodge")+
+      theme_classic(base_line_size = 0) +scale_fill_manual(values = colAge)
+    
+     p4 <- ggplot(d2, aes(x=P,y=relToReg, col=as.character(cl_pooled)))+geom_smooth(stat="identity", size=2)+
+    facet_wrap(~cl_pooled, ncol = 1)+
+       scale_color_manual(values = clp.cols)+theme_classic(base_line_size = 0)
+     
+     p4b <- ggplot(d2, aes(x=as.numeric(as.factor(age)),y=relToReg, col=as.character(cl_pooled)))+geom_smooth(span=1, size=2, se=F)+
+    facet_wrap(~cl_pooled, nrow = 1)+
+       scale_color_manual(values = clp.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+     
+     p4c <- ggplot(d1, aes(x=age,y=relToReg, col=as.character(cl_pooled)))+ geom_point()+
+       geom_smooth(aes(x=as.numeric(as.factor(age)),y=relToReg),span=1, size=2, se=T)+
+    facet_wrap(~cl_pooled, nrow = 1)+
+       scale_color_manual(values = clp.cols)+theme_minimal()+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+  
+     p5 <- ggplot(d1, aes(x=age,y=relToReg, col=as.character(cl_pooled)))+ geom_point()+
+       geom_smooth(aes(x=as.numeric(as.factor(age)),y=relToReg),span=1, size=2, se=T, alpha=0.2)+
+    scale_color_manual(values = clp.cols)+theme_minimal(base_size = 16)+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+     p6 <- ggplot(d1, aes(x=P,y=relToReg, col=as.character(cl_pooled)))+ geom_point()+
+       geom_smooth(aes(x=P,y=relToReg),method = "glm", size=2, se=T, alpha=0.2)+
+    scale_color_manual(values = clp.cols)+theme_minimal(base_size = 16)+Seurat::NoLegend()+ylab("Proportion")+xlab("Age")
+     p7 <- ggplot(subset(d1, cl_pooled!="Pons"), aes(x=P,y=relToReg, col=as.character(cl_pooled)))+ geom_point()+
+       geom_smooth(aes(x=P,y=relToReg),method = "glm", size=2, se=T, alpha=0.2)+
+    scale_color_manual(values = clp.cols)+theme_minimal(base_size = 16)+ylab("Proportion")+xlab("Age")
+  
+     
+  print(p3)
+  print(p)
+  print(p4)
+  print(p1/p4c)
+  print(p/p4c)
+  print(p4b/p4c)
+  print(p+p5+plot_spacer())
+  print(p6+p7)
+
+     })
+```
+
+other detailed plots, see other script
+
+## Heatmaps
+
+### Heatmap age and area
+
+Heatmap/clustering with max of 65536 barcodes -\> sampling necessary
+
+```{r echo=TRUE}
+N4 <- N2
+N4$rowID <- rownames(N4)
+
+N4 <- N4 %>% group_by(age, inj2) %>% slice_sample(n=20000) #CAVE rownames will be lost
+N4 <- as.data.frame(N4)
+rownames(N4) <- N4$rowID
+table(N4$age,N4$inj2)
+
+```
+
+```{r Age and area HM, fig.width=5, fig.height=6,echo=TRUE}
+HMage <- brewer.pal(length(unique(N2$age))+2, "Blues")[-c(1:2)]
+names(HMage)<- sort(unique(N2$age))
+
+HMreg <- as.character(wes_palette("GrandBudapest1", n = length(unique(N2$inj2))))
+names(HMreg)<- unique(N2$inj2)
+
+
+
+for (i in unique(N4$age)) {
+##subsetting data
+df0 <- N4[N4$age==i,]
+#table(df$age)
+
+for (r in unique(df0$inj2)){
+  df <- df0[df0$inj2==r,]
+  npup <- length(unique(df$pup))
+  pup.cols <- as.character(c(wes_palette("Darjeeling2"), wes_palette("Darjeeling1")))[1:npup] #brewer.pal(9, "Paired")
+  names(pup.cols)<- sort(unique(df$pup))
+  
+  cl.cols <- scico(n = (length(unique(df$cl_named))),palette = "cork")#brewer.pal(9, "Paired")
+  names(cl.cols)<- sort(unique(df$cl_named))
+   clp.cols <- c(wes_palette("IsleofDogs2")[1],wes_palette("IsleofDogs2")[4],wes_palette("IsleofDogs2")[3])#brewer.pal(9, "Paired")
+  names(clp.cols)<- sort(unique(df$cl_pooled))
+  
+  
+  M <- as.matrix(df[,Targets])
+  M <- M[!rowSums(M[,Targets])==0,]
+  M <- (M[,Targets])/
+          rowSums((M[,Targets]))
+  df <- df[rownames(df) %in% rownames(M),]
+  
+  HM <- Heatmap(M, name = "mat", col=brewer.pal(9,"Greys"),
+                # col=col_fun,
+                clustering_method_rows = "ward.D2", clustering_distance_rows = "euclidean", #clustering_distance_rows = "manhattan",
+                row_title = paste0("Neurons (BC=",length(df$age)," from N=",length(unique(df$pup))," animals)"),
+                show_row_names =  F, 
+                          column_title = paste0("L5ET projections from ",r," at ",as.character(unique(df$age))), #"(BC=",length(df$age),")"),
+                row_split = data.frame(df$cl_named),
+                #row_split = cbind(data.frame(df$inj2),data.frame(df$cluster.id3)),
+                cluster_row_slices = FALSE,
+                cluster_column_slices = FALSE,
+                #row_order = order(yo$yo,yo$inj,yo$cluster.id2),
+                show_row_dend = F,
+                column_order = Targets,
+                row_dend_reorder = FALSE,
+                cluster_columns=FALSE,
+                right_annotation = rowAnnotation(ClustersMerged=df$cl_pooled,Cluster=df$cl_named,
+                                                 #CSN= df$propScord, Age=df$age,
+                                                 Inj.site=df$inj2, #animal=df$pup,
+                                                 col=list(ClustersMerged=clp.cols,Cluster=cl.cols, 
+                                                          #Age=HMage,animal=pup.cols
+                                                          Inj.site=HMreg)))
+  draw(HM)
+  
+  
+}
+
+
+}
+
+```
+
+###MO+S1
+
+```{r echo=TRUE}
+table(N2$age,N2$inj2)
+N5 <- subset(N2, (inj2=="MO" | inj2=="S1"))
+N5$rowID <- rownames(N5)
+
+N5 <- N5 %>% group_by(age, inj2) %>% slice_sample(n=2000) #CAVE rownames will be lost
+N5 <- as.data.frame(N5)
+rownames(N5) <- N5$rowID
+table(N5$age,N5$inj2)
+```
+
+```{r HM MO S1, echo=TRUE}
+local({
+  
+for (i in unique(N5$age)) {
+##subsetting data
+df <- N5[N5$age==i,]
+table(df$age)
+
+HMage <- brewer.pal(length(unique(N5$age))+2, "Blues")[-c(1:2)]
+names(HMage)<- sort(unique(N5$age))
+
+HMreg <- as.character(wes_palette("GrandBudapest1", n = length(unique(N5$inj2))))
+names(HMreg)<- unique(N5$inj2)
+
+
+npup <- length(unique(df$pup))
+pup.cols <- as.character(c(wes_palette("Darjeeling2"), wes_palette("Darjeeling1")))[1:npup] #brewer.pal(9, "Paired")
+names(pup.cols)<- sort(unique(df$pup))
+
+cl.cols <- scico(n = (length(unique(df$cl_named))),palette = "cork")#brewer.pal(9, "Paired")
+names(cl.cols)<- sort(unique(df$cl_named))
+ clp.cols <- c(wes_palette("IsleofDogs2")[1],wes_palette("IsleofDogs2")[4],wes_palette("IsleofDogs2")[3])#brewer.pal(9, "Paired")
+names(clp.cols)<- sort(unique(df$cl_pooled))
+
+
+M <- as.matrix(df[,Targets])
+M <- M[!rowSums(M[,Targets])==0,]
+M <- (M[,Targets])/
+        rowSums((M[,Targets]))
+df <- df[rownames(df) %in% rownames(M),]
+
+HM <- Heatmap(M, name = "mat", col=brewer.pal(9,"Greys"),
+              # col=col_fun,
+              clustering_method_rows = "ward.D2", clustering_distance_rows = "euclidean", #clustering_distance_rows = "manhattan",
+              row_title = paste0("Neurons (BC=",length(df$age)," sampled out of ",length(subset(N2, age==i & inj2!="Vis")$age),"neurons \nfrom N=",length(unique(df$pup))," animals)"),
+              show_row_names =  F, 
+                        column_title = paste0("L5ET projections  ",as.character(unique(df$age))), #"(BC=",length(df$age),")"),
+              row_split = data.frame(df$cl_named),
+              #row_split = cbind(data.frame(df$inj2),data.frame(df$cluster.id3)),
+              cluster_row_slices = FALSE,
+              cluster_column_slices = FALSE,
+              #row_order = order(yo$yo,yo$inj,yo$cluster.id2),
+              show_row_dend = F,
+              column_order = Targets,
+              row_dend_reorder = FALSE,
+              cluster_columns=FALSE,
+              right_annotation = rowAnnotation(ClustersMerged=df$cl_pooled,Cluster=df$cl_named,
+                                               #CSN= df$propScord, Age=df$age,
+                                               Inj.site=df$inj2, #animal=df$pup,
+                                               col=list(ClustersMerged=clp.cols,Cluster=cl.cols, 
+                                                        #Age=HMage,animal=pup.cols
+                                                        Inj.site=HMreg)))
+draw(HM)
+}
+})
+```
