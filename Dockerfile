@@ -1,8 +1,8 @@
+FROM rocker/binder:4.4.1
+
 ## Declares build arguments
 ARG NB_USER=rstudio
 ARG NB_UID=1001
-
-FROM rocker/binder:4.4.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
