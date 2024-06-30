@@ -25,11 +25,11 @@ The repository L5ET-DEV is a collection of `R` scripts and data to reproduce the
 
 Data can be downloaded from GEO server:
 
--   snRNA-seq of developing L5 ET neurons
+-   snRNA-seq of developing L5 ET neurons: GSE270951
 
--   MAPseq mapping of L5 ET projections
+-   MAPseq mapping of L5 ET projections: GSE271067
 
-Download and save the R object (.RDS) locally. To load the object change the path in the R script to this location.
+We recommend downloading the R object (.RDS file). This file contains the quality controlled and processed data. To load the object, change the path in the R script to the download location.
 
 ## Hardware Requirements
 
