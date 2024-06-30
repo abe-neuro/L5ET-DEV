@@ -23,4 +23,4 @@ RUN Rscript -e 'torch::install_torch();devtools::install_github("BioinfoSupport/
 
 
 ## Copy files to home folder
-#COPY --chown=${NB_USER} ./ /home/${NB_USER}/
+COPY --chown=${NB_USER} ./ /home/${NB_USER}/
