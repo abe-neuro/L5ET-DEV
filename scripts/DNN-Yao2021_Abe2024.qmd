@@ -30,7 +30,7 @@ library(HDF5Array)
 library(scuttle)
 library(ggplot2)
 library(Seurat)
-source("E:/Seq/unige/snRNA-seq_out/Upload/scripts/delayed.R")
+source("scripts/delayed.R")
 library(scml)
 library(scales)
 library(wesanderson)
@@ -46,7 +46,7 @@ library(reshape2)
 Download the Seurat file (LINK) Change file path to load "L5ET-DEV_Abe_2024.rds" (*DOWNLOADFOLDER*/L5ET-DEV_Abe_2024.rds)
 
 ```{r}
-L5ET <- readRDS(file="E:/Seq/unige/snRNA-seq_out/Upload/data/L5ET-DEV_Abe_2024.rds")
+L5ET <- readRDS(file="data/L5ET-DEV_Abe_2024.rds")
 
 DefaultAssay(L5ET) <- "SCT"
 ```
@@ -80,7 +80,7 @@ names(HMT18t)<- sort(unique(L5ET@meta.data$predicted.id))
 ## Load model: Subclass
 
 ```{r }
-modelsc <- luz_load("E:/Seq/unige/snRNA-seq_out/Upload/data/aba_mouse_subclass_classifier_test.luz")
+modelsc <- luz_load("data/aba_mouse_subclass_classifier_test.luz")
 
 ```
 
@@ -107,7 +107,7 @@ x$subclass_pred_label_conf <- rowQ(-x$subclass_pred_scores,2) - rowQ(-x$subclass
 ## Load model: subtype (cluster)
 
 ```{r}
-modelst <- luz_load("E:/Seq/unige/snRNA-seq_out/Upload/data/aba_mouse_cluster_classifier_pruned.luz")
+modelst <- luz_load("data/aba_mouse_cluster_classifier_pruned.luz")
 ```
 
 ```{r include=FALSE}
@@ -182,7 +182,7 @@ local({
  
  
  
-dfcol <- read.csv(file="E:/Seq/unige/snRNA-seq_out/Upload/data/HelperTable_DNNsubtype-ProjPred_mod.csv")
+dfcol <- read.csv(file="data/HelperTable_DNNsubtype-ProjPred_mod.csv")
   dfcol$predicted.dnn <- factor(dfcol$predicted.dnn, levels = dfcol$predicted.dnn)
   # dfcol <- dfcol |> arrange(predicted.dnn)
   
@@ -291,7 +291,7 @@ local({
   df1 <- X |> group_by(predicted.dnn,Var2) |> reframe(MeanSTructure=mean(value)) |> dcast(predicted.dnn~Var2) |> arrange(TH)
   print(df1)
   
-  dfcol <- read.csv(file="E:/Seq/unige/snRNA-seq_out/Upload/data/HelperTable_DNNsubtype-ProjPred_mod.csv")
+  dfcol <- read.csv(file="data/HelperTable_DNNsubtype-ProjPred_mod.csv")
   dfcol$predicted.dnn <- factor(dfcol$predicted.dnn, levels = dfcol$predicted.dnn)
   
   p2a <- ggplot(melt(dfcol), aes(variable,predicted.dnn, fill=value))+geom_tile()+scale_fill_scico(palette = "grayC", direction = -1)+theme_minimal()+scale_y_discrete(limits=rev)
