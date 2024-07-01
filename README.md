@@ -47,7 +47,7 @@ The user should install `R` version 4.4.1 or higher, and several packages set up
 
 # Links
 
-ShinyServer for transcriptional landscapes of Abe et al., 2024: <http://genebrowser.unige.ch/L5ETdev/>
+ShinyServer for transcriptional landscapes of Abe et al., 2024: <https://genebrowser.unige.ch/L5ETdev>
 
 <https://neurocenter-unige.ch/research-groups/denis-jabaudon/>
 
