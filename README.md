@@ -1,4 +1,4 @@
-# Developmental emergence of layer 5 extratelencephalic neuron areal diversity
+# Molecular programs guiding arealization of distinct descending cortical pathways
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/abe-neuro/L5ET-DEV.git/HEAD?urlpath=rstudio)
 
