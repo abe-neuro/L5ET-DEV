@@ -60,8 +60,11 @@ ShinyServer for transcriptional landscapes of Abe et al., 2024: <https://genebro
 ### Research article
 
 **Molecular programs guiding arealization of descending cortical pathways.**
+
 Philipp Abe, Adrien Lavalley, Ilaria Morassut, Antonio J. Santinha, Sergi Roig-Puiggros, Awais Javed, Esther Klingler, Natalia Baumann, Julien Prados, Randall J. Platt & Denis Jabaudon.
+
 Nature (2024). https://doi.org/10.1038/s41586-024-07895-y
+
 
 ### Preprint
 
