@@ -25,9 +25,9 @@ The repository L5ET-DEV is a collection of `R` scripts and data to reproduce the
 
 Data can be downloaded from GEO server:
 
--   snRNA-seq of developing L5 ET neurons: GSE270951
+-   snRNA-seq of developing L5 ET neurons: [GSE270951](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE270951)
 
--   MAPseq mapping of L5 ET projections: GSE271067
+-   MAPseq mapping of L5 ET projections: [GSE271067](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi)
 
 We recommend downloading the R object (.RDS file). This file contains the quality controlled and processed data. To load the object, change the path in the R script to the download location.
 
@@ -57,11 +57,13 @@ ShinyServer for transcriptional landscapes of Abe et al., 2024: <https://genebro
 
 # Citation
 
-###Research article
+### Research article
 
-*Published soon*
+**Molecular programs guiding arealization of descending cortical pathways.**
+Philipp Abe, Adrien Lavalley, Ilaria Morassut, Antonio J. Santinha, Sergi Roig-Puiggros, Awais Javed, Esther Klingler, Natalia Baumann, Julien Prados, Randall J. Platt & Denis Jabaudon.
+Nature (2024). https://doi.org/10.1038/s41586-024-07895-y
 
-###Preprint
+### Preprint
 
 **Developmental molecular controls over arealization of descending cortical motor pathways**
 
